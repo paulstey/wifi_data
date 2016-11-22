@@ -5,7 +5,10 @@ from datetime import datetime
 from collections import Counter
 
 
-sess = pd.read_csv('/data/wifi-analysis/deidentified.20161006.csv', nrows = 5000000)
+sess = pd.read_csv('/data/wifi-analysis/deidentified.20161006.csv', nrows = 100000)
+
+sess["session_length"] = [x.seconds for x in (pd.to_datetime(sess['disconnect_time']) - pd.to_datetime(sess['connect_time']))]
+
 
 ap = pd.DataFrame()
 ap['id'] = pd.unique(sess['ap_id'])
@@ -40,11 +43,12 @@ def connects_perday(df):
 
 
 # candidate predictors
-# 1. length of avg session (on given day)
-# 2. bytes used (on given day)
+# 1. avg session length today
+# 2. bytes used today
 # 3. signal quality (on given day)
 # 4. total sessions (to date)
-# 5.
+# 5. connects today
+# 6. number of connects by device_types
 
 
 
