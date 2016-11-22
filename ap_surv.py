@@ -1,10 +1,11 @@
 import pandas as pd
 import time
 
+from datetime import datetime
 from collections import Counter
 
 
-sess = pd.read_csv('/data/wifi-analysis/deidentified.20161006.csv', nrows = 50000000)
+sess = pd.read_csv('/data/wifi-analysis/deidentified.20161006.csv', nrows = 5000000)
 
 ap = pd.DataFrame()
 ap['id'] = pd.unique(sess['ap_id'])
@@ -39,8 +40,11 @@ def connects_perday(df):
 
 
 # candidate predictors
-# 1. length of avg session
-# 2.
+# 1. length of avg session (on given day)
+# 2. bytes used (on given day)
+# 3. signal quality (on given day)
+# 4. total sessions (to date)
+# 5.
 
 
 
@@ -64,7 +68,7 @@ X.columns = ['mean_signalqual', 'min_signalqual']
 # get vector of last connect time stamps (as strings)
 lastconn_vect = ap_last_conn.values
 
-def striptime(v):
+def datestring(v):
     out = [t[0:10] for t in v]
     return out
 
@@ -72,6 +76,23 @@ def countmap(v):
     out = Counter(v)
     return out
 
-lastconn_vect_day = striptime(lastconn_vect)
+lastconn_vect_day = datestring(lastconn_vect)
 
 day_cnts = countmap(lastconn_vect_day)
+
+
+# create datetime-type column
+sess['date'] = pd.to_datetime(sess['disconnect_time']).dt.date
+
+# This function returns a list of int values indicating
+# the number of days since start of observation period.
+def days_since_start(date):
+    day1 = min(date)
+    out = [x.days + 1 for x in (pd.to_datetime(date) - day1)]
+    return out
+
+
+sess['day'] = days_since_start(sess['date'])
+
+# R's coxph function seems to need start and stop columns
+sess['start'] = sess['day'] - 1
