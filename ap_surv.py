@@ -11,7 +11,7 @@ sess["session_length"] = [x.seconds for x in (pd.to_datetime(sess['disconnect_ti
 
 
 ap = pd.DataFrame()
-ap['id'] = pd.unique(sess['ap_id'])
+ap['ap_id'] = pd.unique(sess['ap_id'])
 
 def lastconnect(df):
     series_out = df.groupby('ap_id')['connect_time'].max()
@@ -58,16 +58,12 @@ def connects_perday(df):
 ap_last_conn = lastconnect(sess)
 ap_bytes_used = bytesused(sess)
 
-ap['last_connect'] = [ap_last_conn.loc[id] for id in ap['id']]
+ap['last_connect'] = [ap_last_conn.loc[id] for id in ap['ap_id']]
 
-
-
-x1 = sess.groupby('ap_id')['avg_signal_quality'].mean()
-x2 = sess.groupby('ap_id')['avg_signal_quality'].min()
-X = pd.concat([x1, x2], axis = 1)
-X.columns = ['mean_signalqual', 'min_signalqual']
-
-
+# x1 = sess.groupby('ap_id')['avg_signal_quality'].mean()
+# x2 = sess.groupby('ap_id')['avg_signal_quality'].min()
+# X = pd.concat([x1, x2], axis = 1)
+# X.columns = ['mean_signalqual', 'min_signalqual']
 
 # get vector of last connect time stamps (as strings)
 lastconn_vect = ap_last_conn.values
@@ -80,23 +76,32 @@ def countmap(v):
     out = Counter(v)
     return out
 
-lastconn_vect_day = datestring(lastconn_vect)
-
-day_cnts = countmap(lastconn_vect_day)
-
-
-# create datetime-type column
-sess['date'] = pd.to_datetime(sess['disconnect_time']).dt.date
 
 # This function returns a list of int values indicating
 # the number of days since start of observation period.
+# NOTE: Fix this!!! it shouldn't assume risk period starts
+# at the same time for every AP
 def days_since_start(date):
     day1 = min(date)
     out = [x.days + 1 for x in (pd.to_datetime(date) - day1)]
     return out
 
 
-sess['day'] = days_since_start(sess['date'])
+# lastconn_vect_day = datestring(lastconn_vect)
+# day_cnts = countmap(lastconn_vect_day)
 
-# R's coxph function seems to need start and stop columns
-sess['start'] = sess['day'] - 1
+
+# create datetime-type columns
+sess['date'] = pd.to_datetime(sess['disconnect_time']).dt.date
+ap['last_connect'] = pd.to_datetime(ap['last_connect']).dt.date
+
+
+# sess['day'] = days_since_start(sess['date'])
+
+
+# get first connect date for each AP, then
+# join to `ap` dataframe.
+first_connect = sess.groupby('ap_id')['date'].min().reset_index()
+first_connect.rename(columns = {'date': 'first_connect'}, inplace = True)
+
+pd.merge(ap, first_connect, how = 'left', on = 'ap_id')
