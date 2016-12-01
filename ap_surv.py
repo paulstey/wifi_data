@@ -5,7 +5,7 @@ from datetime import datetime
 from collections import Counter
 
 
-sess = pd.read_csv('/data/wifi-analysis/deidentified.20161006.csv', nrows = 100000)
+sess = pd.read_csv('/data/wifi-analysis/deidentified.20161006.csv', nrows = 10000000)
 
 sess["session_length"] = [x.seconds for x in (pd.to_datetime(sess['disconnect_time']) - pd.to_datetime(sess['connect_time']))]
 
@@ -68,9 +68,6 @@ ap['last_connect'] = [ap_last_conn.loc[id] for id in ap['ap_id']]
 # get vector of last connect time stamps (as strings)
 lastconn_vect = ap_last_conn.values
 
-def datestring(v):
-    out = [t[0:10] for t in v]
-    return out
 
 def countmap(v):
     out = Counter(v)
@@ -79,16 +76,9 @@ def countmap(v):
 
 # This function returns a list of int values indicating
 # the number of days since start of observation period.
-# NOTE: Fix this!!! it shouldn't assume risk period starts
-# at the same time for every AP
-def days_since_start(date):
-    day1 = min(date)
+def days_since_start(date, day1):
     out = [x.days + 1 for x in (pd.to_datetime(date) - day1)]
     return out
-
-
-# lastconn_vect_day = datestring(lastconn_vect)
-# day_cnts = countmap(lastconn_vect_day)
 
 
 # create datetime-type columns
@@ -96,12 +86,15 @@ sess['date'] = pd.to_datetime(sess['disconnect_time']).dt.date
 ap['last_connect'] = pd.to_datetime(ap['last_connect']).dt.date
 
 
-# sess['day'] = days_since_start(sess['date'])
+# sess['day'] = days_since_start(sess['date'], min(sess['date']))
 
 
-# get first connect date for each AP, then
-# join to `ap` dataframe.
+# get first connect date for each AP, then join to `ap` dataframe.
 first_connect = sess.groupby('ap_id')['date'].min().reset_index()
 first_connect.rename(columns = {'date': 'first_connect'}, inplace = True)
 
-pd.merge(ap, first_connect, how = 'left', on = 'ap_id')
+ap = pd.merge(ap, first_connect, how = 'left', on = 'ap_id')
+
+# get start and stop times (in days)
+ap['tstart'] = days_since_start(ap['first_connect'], min(ap['first_connect']))
+ap['tstop'] = days_since_start(ap['last_connect'], min(ap['first_connect']))
