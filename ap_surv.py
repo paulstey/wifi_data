@@ -5,13 +5,21 @@ from datetime import datetime
 from collections import Counter
 
 
-sess = pd.read_csv('/data/wifi-analysis/deidentified.20161006.csv', nrows = 10000000)
+sess = pd.read_csv('/data/wifi-analysis/deidentified.20161006.csv', nrows = 50000000)
 
-sess["session_length"] = [x.seconds for x in (pd.to_datetime(sess['disconnect_time']) - pd.to_datetime(sess['connect_time']))]
+# convert timestamps strings to DateTime objects
+sess['disconnect_time'] = pd.to_datetime(sess['disconnect_time'])
+sess['connect_time'] = pd.to_datetime(sess['connect_time'])
 
+# Compute session length
+sess['session_length'] = [x.seconds for x in (sess['disconnect_time'] - sess['connect_time'])]
 
+sess.sort(['ap_id', 'connect_time'], inplace = True)
+
+# New dataframe for individual APs
 ap = pd.DataFrame()
 ap['ap_id'] = pd.unique(sess['ap_id'])
+
 
 def lastconnect(df):
     series_out = df.groupby('ap_id')['connect_time'].max()
@@ -27,6 +35,7 @@ def signalquality(df):
     sigqual_mean = df.groupby('ap_id')['avg_signal_quality'].mean()
     sigqual_min = df.groupby('ap_id')['avg_signal_quality'].min()
     sigqual_max = df.groupby('ap_id')['avg_signal_quality'].max()
+
     # aggregate our series
     df_out = pd.concat([sigqual_mean, sigqual_min, sigqual_max], axis = 1)
     df_out.columns = ['mean_signalqual', 'min_signalqual', 'max_signalqual']
@@ -38,9 +47,10 @@ def total_sessions(df):
     return series_out
 
 
-def connects_perday(df):
+def connects_perday(id, disconnect_time):
+    connects_per_day = []
+    ap_lookup = dict()
     return None
-
 
 # candidate predictors
 # 1. avg session length today
