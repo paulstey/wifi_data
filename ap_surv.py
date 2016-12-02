@@ -5,28 +5,38 @@ from datetime import datetime
 from collections import Counter
 
 
-sess = pd.read_csv('/data/wifi-analysis/deidentified.20161006.csv', nrows = 50000000)
-
-# convert timestamps strings to DateTime objects
-sess['disconnect_time'] = pd.to_datetime(sess['disconnect_time'])
-sess['connect_time'] = pd.to_datetime(sess['connect_time'])
-
-# Compute session length
-sess['session_length'] = [x.seconds for x in (sess['disconnect_time'] - sess['connect_time'])]
-
-sess.sort(['ap_id', 'connect_time'], inplace = True)
-
-# New dataframe for individual APs
-ap = pd.DataFrame()
-ap['ap_id'] = pd.unique(sess['ap_id'])
+sess = pd.read_csv('/data/wifi-analysis/deidentified.20161006.csv', nrows = 100000)
 
 
 def lastconnect(df):
+    '''
+    This function returns a pd.Series of the last connect time stamps by AP
+    '''
     series_out = df.groupby('ap_id')['connect_time'].max()
-    return series_out               # dict of last connect time stamp
+    return series_out
+
+
+def flag_ap_deaths(sess_df, last_obs):
+    '''
+    This function returns a list to be added to the session dataframe indicating whether
+    a session is that AP's last and more than 1 month before end of observation period.
+    We assume the data is sorted by AP and datetime.
+    '''
+    n = sess_df.shape[0]
+    out = [False for _ in range(n)]
+
+    for i in range(n-1):
+        if sess_df.loc[i+1, 'ap_id'] != sess_df.loc[i, 'ap_id'] and  \
+        (last_obs - sess_df[i, 'disconnect_time']).days > 31:
+            out[i] = True
+    out[-1] = True
+    return out
 
 
 def bytesused(df):
+    '''
+    This function returns a pd.Series of the bytes used by AP
+    '''
     series_out = df.groupby('ap_id')['bytes_used'].sum()
     return series_out
 
@@ -59,6 +69,24 @@ def connects_perday(id, disconnect_time):
 # 4. total sessions (to date)
 # 5. connects today
 # 6. number of connects by device_types
+
+# convert timestamps strings to DateTime objects
+sess['disconnect_time'] = pd.to_datetime(sess['disconnect_time'])
+sess['connect_time'] = pd.to_datetime(sess['connect_time'])
+
+# Compute session length
+sess['session_length'] = [x.seconds for x in (sess['disconnect_time'] - sess['connect_time'])]
+
+# Sort dataframe by AP ID and timestamps
+sess.sort(['ap_id', 'connect_time'], inplace = True)
+
+
+# Add column denoting whether session is AP's last
+sess['last_session'] = flag_ap_deaths(sess)              # takes ≈40 sec for 100_000 rows
+
+# New dataframe for individual APs
+ap = pd.DataFrame()
+ap['ap_id'] = pd.unique(sess['ap_id'])
 
 
 
