@@ -1,11 +1,12 @@
 import pandas as pd
-import time
+import numpy as np
 
 from datetime import datetime
 from collections import Counter
 
 
-sess = pd.read_csv('/data/wifi-analysis/deidentified.20161006.csv', nrows = 100000)
+sess = pd.read_csv('/data/wifi-analysis/deidentified.20161006_paul.csv')
+sess.reset_index(inplace = True, drop = True)
 
 
 def lastconnect(df):
@@ -16,20 +17,24 @@ def lastconnect(df):
     return series_out
 
 
-def flag_ap_deaths(sess_df, last_obs):
+def flag_ap_deaths(sess_df, last_conn_df):
     '''
     This function returns a list to be added to the session dataframe indicating whether
     a session is that AP's last and more than 1 month before end of observation period.
     We assume the data is sorted by AP and datetime.
     '''
-    n = sess_df.shape[0]
-    out = [False for _ in range(n)]
+    n = last_conn_df.shape[0]
+    m = sess_df.shape[0]
 
-    for i in range(n-1):
-        if sess_df.loc[i+1, 'ap_id'] != sess_df.loc[i, 'ap_id'] and  \
-        (last_obs - sess_df[i, 'disconnect_time']).days > 31:
-            out[i] = True
-    out[-1] = True
+    out = [False for _ in range(m)]
+
+    for i in range(n):
+        if last_conn_df.loc[i, 'died']:
+            # If AP has been flagged as having died, then we get the index
+            # of it's last session (could be more than one, but we ignore dups).
+            idx = sess_df.loc[(sess_df['ap_id'] == last_conn_df.loc[i, 'ap_id']) & \
+            (sess_df['connect_time'] == last_conn_df.loc[i, 'connect_time'])].index[-1]
+            out[idx] = True
     return out
 
 
@@ -57,10 +62,12 @@ def total_sessions(df):
     return series_out
 
 
-def connects_perday(id, disconnect_time):
-    connects_per_day = []
-    ap_lookup = dict()
-    return None
+# This function returns a list of int values indicating
+# the number of days since start of observation period.
+def days_since_start(date, day1 = datetime(2015, 10, 29)):
+    out = [x.days + 1 for x in (date - day1)]
+    return out
+
 
 # candidate predictors
 # 1. avg session length today
@@ -70,23 +77,8 @@ def connects_perday(id, disconnect_time):
 # 5. connects today
 # 6. number of connects by device_types
 
-# convert timestamps strings to DateTime objects
-sess['disconnect_time'] = pd.to_datetime(sess['disconnect_time'])
-sess['connect_time'] = pd.to_datetime(sess['connect_time'])
-
-# Compute session length
-sess['session_length'] = [x.seconds for x in (sess['disconnect_time'] - sess['connect_time'])]
-
-# Sort dataframe by AP ID and timestamps
-sess.sort(['ap_id', 'connect_time'], inplace = True)
 
 
-# Add column denoting whether session is AP's last
-sess['last_session'] = flag_ap_deaths(sess)              # takes ≈40 sec for 100_000 rows
-
-# New dataframe for individual APs
-ap = pd.DataFrame()
-ap['ap_id'] = pd.unique(sess['ap_id'])
 
 
 
@@ -94,6 +86,45 @@ ap['ap_id'] = pd.unique(sess['ap_id'])
 # individual AP's information using `df.loc[id]`, where `id`
 # is the desired AP ID.
 ap_last_conn = lastconnect(sess)
+
+ap_lastconnects = ap_last_conn.reset_index()
+ap_lastconnects['died'] = [x.days > 31 for x in \
+                           (datetime(2016, 10, 06) - ap_lastconnects['connect_time'])]
+
+
+
+# Add column denoting whether session is AP's last
+sess['last_session'] = flag_ap_deaths(sess, ap_lastconnects)
+
+# Add column denoting the day since start of observation period
+sess['day'] = days_since_start(sess['connect_time'])
+
+# Add a column to count sessions when groupby is used
+sess['sessions'] = 1
+
+
+# Group by AP ID and `day`
+grouped = sess.groupby(['ap_id', 'day'])
+sess_ap_day = grouped.agg({'bytes_used': np.sum,
+                           'average_bandwidth': np.mean,
+                           'avg_speed': np.mean,
+                           'avg_signal_quality': np.std,
+                           'avg_signal': np.mean,
+                           'sessions': np.sum,
+                           'session_length': np.mean,
+                           'last_session': np.sum}).reset_index()
+
+sess_ap_day.to_csv('/data/wifi-analysis/deidentified.20161006_paul_ap_day_grouped.csv', index = False)
+
+
+
+
+
+# New dataframe for individual APs
+ap = pd.DataFrame()
+ap['ap_id'] = pd.unique(sess['ap_id'])
+
+
 ap_bytes_used = bytesused(sess)
 
 ap['last_connect'] = [ap_last_conn.loc[id] for id in ap['ap_id']]
@@ -112,19 +143,12 @@ def countmap(v):
     return out
 
 
-# This function returns a list of int values indicating
-# the number of days since start of observation period.
-def days_since_start(date, day1):
-    out = [x.days + 1 for x in (pd.to_datetime(date) - day1)]
-    return out
 
 
 # create datetime-type columns
-sess['date'] = pd.to_datetime(sess['disconnect_time']).dt.date
 ap['last_connect'] = pd.to_datetime(ap['last_connect']).dt.date
 
 
-# sess['day'] = days_since_start(sess['date'], min(sess['date']))
 
 
 # get first connect date for each AP, then join to `ap` dataframe.
