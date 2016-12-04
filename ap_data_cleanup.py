@@ -12,7 +12,7 @@ keep_cols = ['ap_id',
              'avg_signal_quality',
              'avg_signal']
 
-sess = pd.read_csv('/data/wifi-analysis/deidentified.20161006.csv', usecols = keep_cols)#, nrows = 500000)
+sess = pd.read_csv('/data/wifi-analysis/deidentified.20161006.csv', usecols = keep_cols)
 
 
 # convert strings to DateTime objects

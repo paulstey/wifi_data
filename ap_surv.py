@@ -2,10 +2,11 @@ import pandas as pd
 import numpy as np
 
 from datetime import datetime
-from collections import Counter
 
 
-sess = pd.read_csv('/data/wifi-analysis/deidentified.20161006_paul.csv')
+sess = pd.read_csv('/data/wifi-analysis/competition/paul_andras/deidentified.20161006_paul.csv',
+                   parse_dates = [3, 4],
+                   infer_datetime_format = True)
 sess.reset_index(inplace = True, drop = True)
 
 
@@ -19,7 +20,7 @@ def lastconnect(df):
 
 def flag_ap_deaths(sess_df, last_conn_df):
     '''
-    This function returns a list to be added to the session dataframe indicating whether
+    This function returns a list to be added to the session dataframe indicating when
     a session is that AP's last and more than 1 month before end of observation period.
     We assume the data is sorted by AP and datetime.
     '''
@@ -105,16 +106,16 @@ sess['sessions'] = 1
 
 # Group by AP ID and `day`
 grouped = sess.groupby(['ap_id', 'day'])
-sess_ap_day = grouped.agg({'bytes_used': np.sum,
-                           'average_bandwidth': np.mean,
-                           'avg_speed': np.mean,
+sess_ap_day = grouped.agg({'bytes_used': [np.sum, np.mean],
+                           'average_bandwidth': [np.mean, np.std],
+                           'avg_speed': [np.mean, np.std]
                            'avg_signal_quality': np.std,
                            'avg_signal': np.mean,
                            'sessions': np.sum,
                            'session_length': np.mean,
                            'last_session': np.sum}).reset_index()
 
-sess_ap_day.to_csv('/data/wifi-analysis/deidentified.20161006_paul_ap_day_grouped.csv', index = False)
+sess_ap_day.to_csv('/data/wifi-analysis/competition/paul_andras/deidentified.20161006_paul_ap_day_grouped.csv', index = False)
 
 
 
@@ -137,10 +138,6 @@ ap['last_connect'] = [ap_last_conn.loc[id] for id in ap['ap_id']]
 # get vector of last connect time stamps (as strings)
 lastconn_vect = ap_last_conn.values
 
-
-def countmap(v):
-    out = Counter(v)
-    return out
 
 
 
